@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- This template will add the discounted information in the ecommerce product template view-->
+    <template id="inherited_product_template" inherit_id="website_sale.product">
+        <xpath expr="//t[@t-call='website_sale.product_price']" position="replace">
+            <div class="product_price">
+                <t t-set="original_price" t-value="product.list_price"/>
+
+                <!-- Original Price -->
+                <t t-if="product.discount_percentage == 0">
+                    <span class="original_price" style="color: black; font-size: 1.5em; font-weight: bold;">
+                        <t t-esc="original_price"/>
+                    </span>
+                </t>
+
+                <!-- Discounted Price (Displayed only if discount_percentage is greater than 0) -->
+                <t t-if="product.discount_percentage > 0">
+                    <t t-set="discounted_price" t-value="original_price * (1 - product.discount_percentage / 100)"/>
+                    <span class="original_price" style="text-decoration: line-through; color: red; font-size: 1.5em; font-weight: bold;">
+                        <t t-esc="original_price"/>
+                    </span>
+
+                    <span class="discounted_price" style="font-weight: bold; color: green; font-size: 1.5em;">
+                        Discount: <t t-esc="discounted_price"/>
+                    </span>
+                </t>
+            </div>
+        </xpath>
+    </template>
+
+    <!-- This template will add the discounted information in the ecommerce cart lines view-->
+    <template id="custom_cart_lines_inherit" inherit_id="website_sale.cart_lines">
+        <xpath expr="//div[@class='mb-0 h6 fw-bold text-end']" position="replace">
+            <t t-if="line.product_id.discount_percentage > 0">
+                <t t-set="discounted_price" t-value="line.price_unit * (1 - (line.product_id.discount_percentage / 100))"/>
+                <!-- Display original price with strikethrough -->
+                <span t-if="discounted_price" class="text-muted text-decoration-line-through">
+                    <t t-esc="line.price_unit * line.product_uom_qty" 
+                    t-options="{'widget': 'monetary', 'display_currency': website.currency_id}"/>
+                </span>
+                <!-- Display discounted price in red -->
+                <span class="text-danger ms-2">
+                    <t t-esc="discounted_price * line.product_uom_qty" 
+                    t-options="{'widget': 'monetary', 'display_currency': website.currency_id}"/>
+                </span>
+            </t>
+            <t t-else="">
+                <t t-if="line.discount">
+                    <del t-attf-class="#{'text-danger mr8'}"
+                            style="white-space: nowrap;"
+                            t-out="line._get_displayed_unit_price() * line.product_uom_qty"
+                            t-options="{'widget': 'monetary', 'display_currency': website.currency_id}"/>
+                </t>
+                <t t-if="website.show_line_subtotals_tax_selection == 'tax_excluded'"
+                    t-set='product_price'
+                    t-value='line.price_subtotal'/>
+                <t t-else=""
+                    t-set='product_price'
+                    t-value='line.price_total'/>
+                <span t-out="product_price" style="white-space: nowrap;"
+                        t-options="{'widget': 'monetary', 'display_currency': website_sale_order.currency_id}"/>
+                <small t-if="not line._is_not_sellable_line() and line.product_id.base_unit_price"
+                        class="cart_product_base_unit_price d-block text-muted"
+                        groups="website_sale.group_show_uom_price">
+                    <t t-call='website_sale.base_unit_price'>
+                        <t t-set='product' t-value='line.product_id'/>
+                        <t t-set='combination_info'
+                            t-value="{'base_unit_price': product._get_base_unit_price(product_price/line.product_uom_qty)}"/>
+                    </t>
+                </small>
+            </t>
+        </xpath>
+    </template>
+
+    <!-- This template will add the discounted information in the ecommerce total price view-->
+    <template id="inherited_cart_total" inherit_id="website_sale.total">
+        <xpath expr="//div[@id='cart_total']" position="replace">
+            <div id="cart_total" t-if="website_sale_order and website_sale_order.website_order_line" t-att-class="_cart_total_classes">
+                <table class="table mb-0">
+                    <tr id="order_total_untaxed">
+                        <td id="cart_total_subtotal"
+                            class="border-0 pb-2 ps-0 pt-0 text-start text-muted"
+                            colspan="2">
+                            Subtotal
+                        </td>
+                        <td class="text-end border-0 pb-2 pe-0 pt-0">
+                            <!-- Original subtotal with strikethrough -->
+                            <span t-field="website_sale_order.amount_untaxed" 
+                                    class="monetary_field text-danger" 
+                                    style="text-decoration: line-through; white-space: nowrap;" 
+                                    t-options="{'widget': 'monetary', 'display_currency': website_sale_order.currency_id}"/>
+                            <br/>
+                            <!-- Calculate the discounted subtotal -->
+                            <t t-set="subtotal_discounted" 
+                                t-value="website_sale_order.amount_untaxed * (1 - (website_sale_order.website_order_line[0].product_id.discount_percentage or 0.0) / 100)"/>
+                            <span t-esc="subtotal_discounted" 
+                                    class="monetary_field" 
+                                    style="white-space: nowrap;" 
+                                    t-options="{'widget': 'monetary', 'display_currency': website_sale_order.currency_id}"/>
+                        </td>
+                    </tr>
+                    <tr id="order_total_taxes">
+                        <td colspan="2" class="text-muted border-0 ps-0 pt-0 pb-3">Taxes</td>
+                        <td class="text-end border-0 pe-0 pt-0 pb-3">
+                            <span t-field="website_sale_order.amount_tax"
+                                    class="monetary_field"
+                                    style="white-space: nowrap;"
+                                    t-options="{'widget': 'monetary', 'display_currency': website_sale_order.currency_id}"/>
+                        </td>
+                    </tr>
+                    <tr id="order_total" class="border-top">
+                        <td colspan="2" class="border-0 ps-0 pt-3"><strong>Total</strong></td>
+                        <td class="text-end border-0 px-0 pt-3">
+                            <!-- Calculate the total price including taxes -->
+                            <t t-set="total_with_discount" 
+                                t-value="(subtotal_discounted + website_sale_order.amount_tax)"/>
+                            <strong t-esc="total_with_discount" 
+                                    class="monetary_field text-end p-0"
+                                    t-options="{'widget': 'monetary', 'display_currency': website_sale_order.currency_id}"/>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </xpath>
+    </template>
+
+    <!-- This template will add the discounted information in the ecommerce product list view-->
+    <template id="inherited_products_item" name="Inherited Products Item" inherit_id="website_sale.products_item">
+        <xpath expr="//div[hasclass('o_wsale_product_sub')]" position="replace">
+            <div class="product_price" itemprop="offers" itemscope="itemscope" itemtype="http://schema.org/Offer">
+                <t t-set="template_price_vals" t-value="get_product_prices(product)"/>
+                <div class="o_wsale_product_btn"/>
+                <t t-set="base_price" t-value="template_price_vals.get('base_price', 0)"/>
+                <t t-set="discount_percentage" t-value="product.discount_percentage"/>
+                
+                <t t-if="product.list_price is not None and discount_percentage is not None and discount_percentage > 0">
+                    <t t-set="discounted_price" 
+                        t-value="product.list_price * (1 - (discount_percentage / 100))"/>
+                </t>
+                <t t-else="">
+                    <t t-set="discounted_price" 
+                        t-value="0"/>
+                </t>
+
+                <div class="product_price" itemprop="offers" itemscope="itemscope" itemtype="http://schema.org/Offer">
+                    <t t-if="'base_price' in template_price_vals and (template_price_vals['base_price'] &gt; template_price_vals['price_reduce']) and (template_price_vals['price_reduce'] or not website.prevent_zero_price_sale)">
+                        <del t-attf-class="text-muted me-1 h6 mb-0" style="white-space: nowrap;">
+                            <em class="small" t-esc="template_price_vals['base_price']" t-options="{'widget': 'monetary', 'display_currency': website.currency_id}" />
+                        </del>
+                    </t>
+                    <t t-if="base_price is not None and discount_percentage is not None and discount_percentage > 0">
+                        <span class="h6 mb-0" 
+                            t-if="template_price_vals['price_reduce'] or not website.prevent_zero_price_sale"
+                            t-esc="template_price_vals['price_reduce']" 
+                            t-options="{'widget': 'monetary', 'display_currency': website.currency_id}"
+                            style="text-decoration: line-through; color: red;"/>
+                        <span class="h6 mb-0" t-else="" t-field="website.prevent_zero_price_sale_text"/>
+                        <span class="h6 mb-0 text-success ms-2">
+                            (Discount: <t t-esc="discounted_price" />)
+                        </span>
+                    </t>
+                    <t t-else="">
+                        <span class="h6 mb-0" t-if="template_price_vals['price_reduce'] or not website.prevent_zero_price_sale" t-esc="template_price_vals['price_reduce']" t-options="{'widget': 'monetary', 'display_currency': website.currency_id}"/>
+                        <span class="h6 mb-0" t-else="" t-field="website.prevent_zero_price_sale_text"/>
+                        
+                    </t>
+
+                    <span itemprop="price" style="display:none;" t-esc="template_price_vals['price_reduce']" />
+                    <span itemprop="priceCurrency" style="display:none;" t-esc="website.currency_id.name" />
+                </div>
+            </div>
+        </xpath>
+    </template>
+</odoo>
